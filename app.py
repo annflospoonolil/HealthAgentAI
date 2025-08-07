@@ -1,36 +1,41 @@
 import streamlit as st
+import google.generativeai as genai
 
+# --- Setup ---
 st.set_page_config(page_title="AI Health Assistant", layout="centered")
-
 st.title("🩺 AI Health Assistant")
-st.markdown("Hi there! 👋 I'm your AI health buddy.\n\nTell me how you're feeling today.")
+st.markdown("Hi! I'm your AI health buddy. How are you feeling today?")
 
-# Initialize session state
-if "submitted" not in st.session_state:
-    st.session_state.submitted = False
-if "response" not in st.session_state:
-    st.session_state.response = ""
+# --- Gemini API Setup ---
+api_key = st.secrets["GEMINI_API_KEY"] if "GEMINI_API_KEY" in st.secrets else st.text_input("Enter your Gemini API Key", type="password")
 
-def handle_submit():
-    user_input = st.session_state.user_input.strip().lower()
+if api_key:
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-1.5-flash")
 
-    if user_input in ["hey", "hello", "hi"]:
-        response = "🤖 Assistant: Hello there! 👋 How are you feeling today? Please describe any symptoms you're experiencing."
-    elif len(user_input.split()) <= 2:
-        response = f"🤖 Assistant: I need a bit more detail to help. Could you describe how you're feeling?"
-    else:
-        response = f"""
-🤖 Assistant: Thanks for sharing. Based on what you said: "{user_input}", you might be having a mild condition like fatigue, a cold, or stress.
+    # --- User Input ---
+    user_input = st.text_area("Describe your symptoms here:", placeholder="Eg: I have a sore throat and feel tired...")
 
-🤖 Assistant: Could you tell me if you also have a fever, pain, or any unusual symptoms?
-"""
-    st.session_state.response = response
-    st.session_state.user_input = ""
-    st.session_state.submitted = True
+    if st.button("Analyze Symptoms"):
+        if not user_input.strip():
+            st.warning("Please describe your symptoms.")
+        else:
+            with st.spinner("Analyzing your symptoms..."):
+                prompt = f"""
+                You are a friendly and helpful AI health assistant.
 
-st.text_area("Describe your symptoms here:", key="user_input", on_change=handle_submit)
+                The user said: "{user_input}"
 
-if st.session_state.submitted and st.session_state.response:
-    st.subheader("Assistant Response:")
-    st.write(st.session_state.response)
-    st.session_state.submitted = False
+                1. Extract the symptoms.
+                2. Predict 2–3 likely common illnesses (not a diagnosis).
+                3. Suggest next steps (home care or when to see a doctor).
+                4. Be friendly and conversational.
+                """
+                try:
+                    response = model.generate_content(prompt)
+                    st.markdown("### 🤖 Assistant Response:")
+                    st.markdown(response.text.strip())
+                except Exception as e:
+                    st.error(f"Something went wrong: {e}")
+else:
+    st.info("Please enter your Gemini API key to begin.")
